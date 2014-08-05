@@ -22,7 +22,8 @@ tensor_product <- function(matrix1,matrix2) {
 	return(result)
 }
 
-integrand_e <- function(x,k) {dpois(k,x)}
+integrand_ep <- function(x,k) {dpois(k,x)}
+integrand_en <- function(x,mean,sd) {dnorm(x=mean,mean=x,sd=sd)}
 integrand_m <- function(x,mean) {dnorm(x=mean,mean=x,sd=0.14)}
 
 geo_mean <- function(data) {
@@ -173,9 +174,14 @@ for (i in beg:end){
 		read_count <- trunc(counts_BRCA_plusOne[workingList_BRCA[i],ANs[current_sample]])
 		lambdas <- breaksEXPRESSION * factors_ls[which_ANs[current_sample]]
 		frequencies_expr <- rep(0,length(breaksEXPRESSION)-1)
-		for (freq in 1:res_expr) {
-			frequencies_expr[freq] <- integrate(integrand_e, lower = lambdas[freq], upper = lambdas[freq+1], read_count)[1]
-		}
+		if (read_count > 1000) 
+			for (freq in 1:res_expr) {
+				frequencies_expr[freq] <- integrate(integrand_en, lower = lambdas[freq], upper = lambdas[freq+1], read_count,sd=sqrt(read_count))[1]
+			}
+		else
+			for (freq in 1:res_expr) {
+				frequencies_expr[freq] <- integrate(integrand_ep, lower = lambdas[freq], upper = lambdas[freq+1], read_count)[1]
+			}
 		frequencies_expr <- unlist(frequencies_expr)
 		if (length(which(frequencies_expr==0))==5) frequencies_expr[length(frequencies_expr)] <- 1
 		frequencies_expr <- frequencies_expr + epsilon
@@ -265,9 +271,14 @@ for (i in beg:end){
 		read_count <- trunc(counts_BRCA_plusOne[workingList_BRCA[i],Ts[current_sample]])
 		lambdas <- breaksEXPRESSION * factors_ls[which_Ts[current_sample]]
 		frequencies_expr <- rep(0,length(breaksEXPRESSION)-1)
-		for (freq in 1:res_expr) {
-			frequencies_expr[freq] <- integrate(integrand_e, lower = lambdas[freq], upper = lambdas[freq+1], read_count)[1]
-		}
+		if (read_count > 1000) 
+			for (freq in 1:res_expr) {
+				frequencies_expr[freq] <- integrate(integrand_en, lower = lambdas[freq], upper = lambdas[freq+1], read_count,sd=sqrt(read_count))[1]
+			}
+		else
+			for (freq in 1:res_expr) {
+				frequencies_expr[freq] <- integrate(integrand_ep, lower = lambdas[freq], upper = lambdas[freq+1], read_count)[1]
+			}
 		frequencies_expr <- unlist(frequencies_expr)
 		if (length(which(frequencies_expr==0))==5) frequencies_expr[length(frequencies_expr)] <- 1
 		frequencies_expr <- frequencies_expr + epsilon
