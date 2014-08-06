@@ -4,8 +4,7 @@ end <- as.numeric(args[2])
 load("./essentials_BRCA.RData")
 epsilon <- 1e-300
 res_expr <- 50
-integrand_ep <- function(x,k) {dpois(k,x)}
-integrand_en <- function(x,mean,sd) {dnorm(x=mean,mean=x,sd=sd)}
+integrand_e <- function(x,k) {dpois(k,x)}
 
 for (i in beg:end){
 	cat(paste("doing ",i,"\n",sep=""))
@@ -53,6 +52,7 @@ for (i in beg:end){
 	noBreaks <- res_expr-1
 	for (j in 1:noBreaks) { breaks <- c (breaks, tempAN[which(tempAN[,3] >= j*(1/(1+noBreaks))),1][1])}
 	breaksEXPRESSION <- c(0,breaks,Inf)
+	max_boundary <- (20+max(counts_BRCA_plusOne[workingList_BRCA[i],c(Ts,ANs)]))*5
 	
 	all_labels_expr <- as.character(seq(1,res_expr,1))
 	expr_t <- matrix(ncol=res_expr,nrow=length(Ts))
@@ -89,25 +89,22 @@ for (i in beg:end){
 		# expression
 		read_count <- trunc(counts_BRCA_plusOne[workingList_BRCA[i],ANs[current_sample]])
 		lambdas <- breaksEXPRESSION * factors_ls[which_ANs[current_sample]]
-        frequencies_expr <- rep(0,length(breaksEXPRESSION)-1)
-		if (read_count > 1000) 
-			for (freq in 1:res_expr) {
-				frequencies_expr[freq] <- integrate(integrand_en, lower = lambdas[freq], upper = lambdas[freq+1], read_count,sd=sqrt(read_count))[1]
-			}
-		else
-			for (freq in 1:res_expr) {
-				frequencies_expr[freq] <- integrate(integrand_ep, lower = lambdas[freq], upper = lambdas[freq+1], read_count)[1]
-			}
+		lambdas[length(lambdas)] <- max_boundary
+		frequencies_expr <- rep(0,length(breaksEXPRESSION)-1)
+		for (freq in 1:res_expr) {
+			frequencies_expr[freq] <- integrate(integrand_e, lower = lambdas[freq], upper = lambdas[freq+1], read_count)[1]
+		}
 		frequencies_expr <- unlist(frequencies_expr)
 		if (length(which(frequencies_expr==0))==5) frequencies_expr[length(frequencies_expr)] <- 1
 		frequencies_expr <- frequencies_expr + epsilon
+		frequencies_expr <- frequencies_expr/sum(frequencies_expr)
 		
 		#start precomputing correct initialization of parameters
 		expr_an[current_sample,] <- frequencies_expr
 		tempFac[current_sample,] <- paste('[1,',res_expr,']((',paste(frequencies_expr,sep="",collapse=","),'))',sep="")
 	}
 	# precompute correct initialization of parameters for AN-only model
-	prior_expr <- apply(expr_an,2,mean)
+	prior_expr <- apply(expr_an,2,mean)/sum(apply(expr_an,2,mean))
 	# write potentials file
 	string <- paste(prior_expr,collapse=",")
 	expr.pots <- paste("\nNAME:\t\tpot_EXPR.likelihood\nTYPE:\t\trowNorm\nPOT_MAT:\t[1,",res_expr,"]((",string,"))\nPC_MAT:\t\t[1,",res_expr,"]((",paste(rep(1,res_expr),collapse=","),"))\n\nNAME:\t\tpot_EXPR.prior\nTYPE:\t\trowNorm\nPOT_MAT:\t[1,",res_expr,"]((",string,"))\nPC_MAT:\t\t[1,",res_expr,"]((",paste(rep(1,res_expr),collapse=","),"))\n\n",sep="",collapse="")
@@ -132,18 +129,15 @@ for (i in beg:end){
 		# expression
 		read_count <- trunc(counts_BRCA_plusOne[workingList_BRCA[i],Ts[current_sample]])
 		lambdas <- breaksEXPRESSION * factors_ls[which_Ts[current_sample]]
+		lambdas[length(lambdas)] <- max_boundary
 		frequencies_expr <- rep(0,length(breaksEXPRESSION)-1)
-		if (read_count > 1000) 
-			for (freq in 1:res_expr) {
-				frequencies_expr[freq] <- integrate(integrand_en, lower = lambdas[freq], upper = lambdas[freq+1], read_count,sd=sqrt(read_count))[1]
-			}
-		else
-			for (freq in 1:res_expr) {
-				frequencies_expr[freq] <- integrate(integrand_ep, lower = lambdas[freq], upper = lambdas[freq+1], read_count)[1]
-			}
+		for (freq in 1:res_expr) {
+			frequencies_expr[freq] <- integrate(integrand_e, lower = lambdas[freq], upper = lambdas[freq+1], read_count)[1]
+		}
 		frequencies_expr <- unlist(frequencies_expr)
 		if (length(which(frequencies_expr==0))==5) frequencies_expr[length(frequencies_expr)] <- 1
 		frequencies_expr <- frequencies_expr + epsilon
+		frequencies_expr <- frequencies_expr/sum(frequencies_expr)
 		
 		#start precomputing correct initialization of parameters
 		expr_t[current_sample,] <- frequencies_expr
@@ -151,7 +145,7 @@ for (i in beg:end){
 		tempFac[current_sample,] <- paste('[1,',res_expr,']((',paste(frequencies_expr,sep="",collapse=","),'))',sep="")
 	}
 	# precompute correct initialization of parameters for T-only model
-	prior_expr <- apply(expr_t,2,mean)
+	prior_expr <- apply(expr_t,2,mean)/sum(apply(expr_t,2,mean))
 	# write potentials file
 	string <- paste(prior_expr,collapse=",")
 	expr.pots <- paste("\nNAME:\t\tpot_EXPR.likelihood\nTYPE:\t\trowNorm\nPOT_MAT:\t[1,",res_expr,"]((",string,"))\nPC_MAT:\t\t[1,",res_expr,"]((",paste(rep(1,res_expr),collapse=","),"))\n\nNAME:\t\tpot_EXPR.prior\nTYPE:\t\trowNorm\nPOT_MAT:\t[1,",res_expr,"]((",string,"))\nPC_MAT:\t\t[1,",res_expr,"]((",paste(rep(1,res_expr),collapse=","),"))\n\n",sep="",collapse="")
@@ -172,7 +166,7 @@ for (i in beg:end){
 	## Full model developed from here, to obtain likelihoods of Ts and ANs ####
 	# precompute correct initialization of parameters for joint model
 	expr_all <- rbind(expr_t,expr_an)
-	prior_expr <- apply(expr_all,2,mean)
+	prior_expr <- apply(expr_all,2,mean)/sum(apply(expr_all,2,mean))
 	# write potentials file
 	string <- paste(prior_expr,collapse=",")
 	expr.pots <- paste("\nNAME:\t\tpot_EXPR.likelihood\nTYPE:\t\trowNorm\nPOT_MAT:\t[1,",res_expr,"]((",string,"))\nPC_MAT:\t\t[1,",res_expr,"]((",paste(rep(1,res_expr),collapse=","),"))\n\nNAME:\t\tpot_EXPR.prior\nTYPE:\t\trowNorm\nPOT_MAT:\t[1,",res_expr,"]((",string,"))\nPC_MAT:\t\t[1,",res_expr,"]((",paste(rep(1,res_expr),collapse=","),"))\n\n",sep="",collapse="")

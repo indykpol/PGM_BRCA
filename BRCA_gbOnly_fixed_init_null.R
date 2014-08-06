@@ -108,6 +108,7 @@ for (i in beg:end){
 				frequencies_pr[freq] <- integrate(integrand_m,lower=breaksPROMOTER[freq],upper=breaksPROMOTER[freq+1],mean=miu)$value
 			}
 			frequencies_pr <- unlist(frequencies_pr) + epsilon
+			frequencies_pr <- frequencies_pr/sum(frequencies_pr)
 			cpg_list_pr[[cpg]] <- frequencies_pr
 		}
 		
@@ -152,6 +153,7 @@ for (i in beg:end){
 				frequencies_pr[freq] <- integrate(integrand_m,lower=breaksPROMOTER[freq],upper=breaksPROMOTER[freq+1],mean=miu)$value
 			}
 			frequencies_pr <- unlist(frequencies_pr) + epsilon
+			frequencies_pr <- frequencies_pr/sum(frequencies_pr)
 			cpg_list_pr[[cpg]] <- frequencies_pr
 		}
 		

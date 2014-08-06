@@ -22,8 +22,7 @@ tensor_product <- function(matrix1,matrix2) {
 	return(result)
 }
 
-integrand_ep <- function(x,k) {dpois(k,x)}
-integrand_en <- function(x,mean,sd) {dnorm(x=mean,mean=x,sd=sd)}
+integrand_e <- function(x,k) {dpois(k,x)}
 integrand_m <- function(x,mean) {dnorm(x=mean,mean=x,sd=0.14)}
 
 geo_mean <- function(data) {
@@ -130,6 +129,7 @@ for (i in beg:end){
 	noBreaks <- res_expr-1
 	for (j in 1:noBreaks) { breaks <- c (breaks, tempAN[which(tempAN[,3] >= j*(1/(1+noBreaks))),1][1])}
 	breaksEXPRESSION <- c(0,breaks,Inf)
+	max_boundary <- (20+max(counts_BRCA_plusOne[workingList_BRCA[i],c(Ts,ANs)]))*5
 	########################################################
 	# dynamic generation of model specification files here #
 	########################################################
@@ -173,18 +173,15 @@ for (i in beg:end){
 		# expression
 		read_count <- trunc(counts_BRCA_plusOne[workingList_BRCA[i],ANs[current_sample]])
 		lambdas <- breaksEXPRESSION * factors_ls[which_ANs[current_sample]]
+		lambdas[length(lambdas)] <- max_boundary
 		frequencies_expr <- rep(0,length(breaksEXPRESSION)-1)
-		if (read_count > 1000) 
-			for (freq in 1:res_expr) {
-				frequencies_expr[freq] <- integrate(integrand_en, lower = lambdas[freq], upper = lambdas[freq+1], read_count,sd=sqrt(read_count))[1]
-			}
-		else
-			for (freq in 1:res_expr) {
-				frequencies_expr[freq] <- integrate(integrand_ep, lower = lambdas[freq], upper = lambdas[freq+1], read_count)[1]
-			}
+		for (freq in 1:res_expr) {
+			frequencies_expr[freq] <- integrate(integrand_e, lower = lambdas[freq], upper = lambdas[freq+1], read_count)[1]
+		}
 		frequencies_expr <- unlist(frequencies_expr)
 		if (length(which(frequencies_expr==0))==5) frequencies_expr[length(frequencies_expr)] <- 1
 		frequencies_expr <- frequencies_expr + epsilon
+		frequencies_expr <- frequencies_expr/sum(frequencies_expr)
 		
 		# gene body
 		cpg_list_gb <- NULL
@@ -195,6 +192,7 @@ for (i in beg:end){
 				frequencies_gb[freq] <- integrate(integrand_m,lower=breaksBODY[freq],upper=breaksBODY[freq+1],mean=miu)$value
 			}
 			frequencies_gb <- unlist(frequencies_gb) + epsilon
+			frequencies_gb <- frequencies_gb/sum(frequencies_gb)
 			cpg_list_gb[[cpg]] <- frequencies_gb
 		}
 		
@@ -207,6 +205,7 @@ for (i in beg:end){
 				frequencies_pr[freq] <- integrate(integrand_m,lower=breaksPROMOTER[freq],upper=breaksPROMOTER[freq+1],mean=miu)$value
 			}
 			frequencies_pr <- unlist(frequencies_pr) + epsilon
+			frequencies_pr <- frequencies_pr/sum(frequencies_pr)
 			cpg_list_pr[[cpg]] <- frequencies_pr
 		}
 		
@@ -270,18 +269,15 @@ for (i in beg:end){
 		# expression
 		read_count <- trunc(counts_BRCA_plusOne[workingList_BRCA[i],Ts[current_sample]])
 		lambdas <- breaksEXPRESSION * factors_ls[which_Ts[current_sample]]
+		lambdas[length(lambdas)] <- max_boundary
 		frequencies_expr <- rep(0,length(breaksEXPRESSION)-1)
-		if (read_count > 1000) 
-			for (freq in 1:res_expr) {
-				frequencies_expr[freq] <- integrate(integrand_en, lower = lambdas[freq], upper = lambdas[freq+1], read_count,sd=sqrt(read_count))[1]
-			}
-		else
-			for (freq in 1:res_expr) {
-				frequencies_expr[freq] <- integrate(integrand_ep, lower = lambdas[freq], upper = lambdas[freq+1], read_count)[1]
-			}
+		for (freq in 1:res_expr) {
+			frequencies_expr[freq] <- integrate(integrand_e, lower = lambdas[freq], upper = lambdas[freq+1], read_count)[1]
+		}
 		frequencies_expr <- unlist(frequencies_expr)
 		if (length(which(frequencies_expr==0))==5) frequencies_expr[length(frequencies_expr)] <- 1
 		frequencies_expr <- frequencies_expr + epsilon
+		frequencies_expr <- frequencies_expr/sum(frequencies_expr)
 		
 		# gene body
 		cpg_list_gb <- NULL
@@ -292,6 +288,7 @@ for (i in beg:end){
 				frequencies_gb[freq] <- integrate(integrand_m,lower=breaksBODY[freq],upper=breaksBODY[freq+1],mean=miu)$value
 			}
 			frequencies_gb <- unlist(frequencies_gb) + epsilon
+			frequencies_gb <- frequencies_gb/sum(frequencies_gb)
 			cpg_list_gb[[cpg]] <- frequencies_gb
 		}
 		
@@ -304,6 +301,7 @@ for (i in beg:end){
 				frequencies_pr[freq] <- integrate(integrand_m,lower=breaksPROMOTER[freq],upper=breaksPROMOTER[freq+1],mean=miu)$value
 			}
 			frequencies_pr <- unlist(frequencies_pr) + epsilon
+			frequencies_pr <- frequencies_pr/sum(frequencies_pr)
 			cpg_list_pr[[cpg]] <- frequencies_pr
 		}
 		
