@@ -13,16 +13,6 @@ geo_mean <- function(data) {
 	return(gm)
 }
 
-M2Beta <- function (M) 
-{
-    return((2^M)/(2^M + 1))
-}
-
-Beta2M <- function (B) 
-{
-    return(log2(B/(1 - B)))
-}
-
 for (i in beg:end){
 	cat(paste("doing ",i,"\n",sep=""))
 	ptm <- proc.time()[3]
@@ -247,8 +237,8 @@ for (i in beg:end){
 		# Ds calculation
 		Ds[run] <- 2*(sum(allData_full_likelihoods) - (sum(ANs_AN_likelihoods)+sum(Ts_T_likelihoods)))
 	}
-	pval_zscore <- 1-pnorm(D,mean=mean(Ds),sd=sd(Ds))
-	zscore <- (D - mean(Ds)) / sd(Ds)
+	if (D != 0) pval_zscore <- 1-pnorm(D,mean=mean(Ds),sd=sd(Ds)) else pval_zscore <- 1
+	if (sd(Ds) != 0) zscore <- (D - mean(Ds)) / sd(Ds) else zscore <- 0
 	###########################################################################################
 	eval(parse(text=paste('write.table(x=t(c(pval_zscore,D,mean(Ds),sd(Ds),zscore)), col.names=FALSE, row.names=FALSE, append=TRUE, file="./',i,'.result")',sep="")))
 	cat(paste("done ",i," in ", sprintf("%.2f", (proc.time()[3]-ptm)/60)," minutes\n",sep=""))

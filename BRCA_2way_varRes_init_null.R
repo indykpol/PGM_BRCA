@@ -31,14 +31,6 @@ geo_mean <- function(data) {
 	return(gm)
 }
 
-M2Beta <- function (M) {
-    return((2^M)/(2^M + 1))
-}
-
-Beta2M <- function (B) {
-    return(log2(B/(1 - B)))
-}
-
 for (i in beg:end){
 	cat(paste("doing ",i,"\n",sep=""))
 	ptm <- proc.time()[3]
@@ -111,12 +103,10 @@ for (i in beg:end){
 	
 	# expression
 	temp <- counts_BRCA_plusOne[workingList_BRCA[i],c(Ts,ANs)]
-	temp <- as.data.frame(temp)
-	colnames(temp) <- "EXPRESSION"
 	tempAN <- matrix(ncol=2)
 	colnames(tempAN) <- c("cpm","density")
-	for (j in 1:nrow(temp)) {
-		lambda <- temp[j,1]
+	for (j in 1:length(temp)) {
+		lambda <- temp[j]
 		X <- seq(round(max(lambda-(4*lambda*lambda^(-1/2)),1)),round(lambda+(4*lambda*lambda^(-1/2))))
 		current <- factors_ls[c(which_Ts,which_ANs)[j]]
 		tempAN <- rbind(tempAN,cbind(X/current,dpois(X,lambda=lambda)*current))
@@ -128,8 +118,9 @@ for (i in beg:end){
 	breaks <- NULL
 	noBreaks <- res_expr-1
 	for (j in 1:noBreaks) { breaks <- c (breaks, tempAN[which(tempAN[,3] >= j*(1/(1+noBreaks))),1][1])}
-	breaksEXPRESSION <- c(0,breaks,Inf)
-	max_boundary <- (20+max(counts_BRCA_plusOne[workingList_BRCA[i],c(Ts,ANs)]))*5
+	max <- max(counts_BRCA_plusOne[workingList_BRCA[i],c(Ts,ANs)])
+	max_boundary <- 20+max+(4*max*max^(-1/2))
+	breaksEXPRESSION <- c(0,breaks,max_boundary)
 	########################################################
 	# dynamic generation of model specification files here #
 	########################################################
@@ -173,13 +164,12 @@ for (i in beg:end){
 		# expression
 		read_count <- trunc(counts_BRCA_plusOne[workingList_BRCA[i],ANs[current_sample]])
 		lambdas <- breaksEXPRESSION * factors_ls[which_ANs[current_sample]]
-		lambdas[length(lambdas)] <- max_boundary
 		frequencies_expr <- rep(0,length(breaksEXPRESSION)-1)
 		for (freq in 1:res_expr) {
 			frequencies_expr[freq] <- integrate(integrand_e, lower = lambdas[freq], upper = lambdas[freq+1], read_count,stop.on.error=FALSE)[1]
 		}
 		frequencies_expr <- unlist(frequencies_expr)
-		if (length(which(frequencies_expr==0))==5) frequencies_expr[length(frequencies_expr)] <- 1
+		if (length(which(frequencies_expr==0))==res_expr) frequencies_expr[length(frequencies_expr)] <- 1
 		frequencies_expr <- frequencies_expr + epsilon
 		frequencies_expr <- frequencies_expr/sum(frequencies_expr)
 		
@@ -269,13 +259,12 @@ for (i in beg:end){
 		# expression
 		read_count <- trunc(counts_BRCA_plusOne[workingList_BRCA[i],Ts[current_sample]])
 		lambdas <- breaksEXPRESSION * factors_ls[which_Ts[current_sample]]
-		lambdas[length(lambdas)] <- max_boundary
 		frequencies_expr <- rep(0,length(breaksEXPRESSION)-1)
 		for (freq in 1:res_expr) {
 			frequencies_expr[freq] <- integrate(integrand_e, lower = lambdas[freq], upper = lambdas[freq+1], read_count,stop.on.error=FALSE)[1]
 		}
 		frequencies_expr <- unlist(frequencies_expr)
-		if (length(which(frequencies_expr==0))==5) frequencies_expr[length(frequencies_expr)] <- 1
+		if (length(which(frequencies_expr==0))==res_expr) frequencies_expr[length(frequencies_expr)] <- 1
 		frequencies_expr <- frequencies_expr + epsilon
 		frequencies_expr <- frequencies_expr/sum(frequencies_expr)
 		
@@ -466,8 +455,8 @@ for (i in beg:end){
 		
 		Ds[run] <- 2*(sum(allData_full_likelihoods) - (sum(ANs_AN_likelihoods)+sum(Ts_T_likelihoods)))
 	}
-	pval_zscore <- 1-pnorm(D,mean=mean(Ds),sd=sd(Ds))
-	zscore <- (D - mean(Ds)) / sd(Ds)
+	if (D != 0) pval_zscore <- 1-pnorm(D,mean=mean(Ds),sd=sd(Ds)) else pval_zscore <- 1
+	if (sd(Ds) != 0) zscore <- (D - mean(Ds)) / sd(Ds) else zscore <- 0
 	###########################################################################################
 	
 	eval(parse(text=paste('write.table(x=t(c(pval_zscore,D,mean(Ds),sd(Ds),zscore)), col.names=FALSE, row.names=FALSE, append=FALSE, file="./',i,'.result")',sep="")))
