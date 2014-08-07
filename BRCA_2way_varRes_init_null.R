@@ -176,7 +176,7 @@ for (i in beg:end){
 		lambdas[length(lambdas)] <- max_boundary
 		frequencies_expr <- rep(0,length(breaksEXPRESSION)-1)
 		for (freq in 1:res_expr) {
-			frequencies_expr[freq] <- integrate(integrand_e, lower = lambdas[freq], upper = lambdas[freq+1], read_count)[1]
+			frequencies_expr[freq] <- integrate(integrand_e, lower = lambdas[freq], upper = lambdas[freq+1], read_count,stop.on.error=FALSE)[1]
 		}
 		frequencies_expr <- unlist(frequencies_expr)
 		if (length(which(frequencies_expr==0))==5) frequencies_expr[length(frequencies_expr)] <- 1
@@ -272,7 +272,7 @@ for (i in beg:end){
 		lambdas[length(lambdas)] <- max_boundary
 		frequencies_expr <- rep(0,length(breaksEXPRESSION)-1)
 		for (freq in 1:res_expr) {
-			frequencies_expr[freq] <- integrate(integrand_e, lower = lambdas[freq], upper = lambdas[freq+1], read_count)[1]
+			frequencies_expr[freq] <- integrate(integrand_e, lower = lambdas[freq], upper = lambdas[freq+1], read_count,stop.on.error=FALSE)[1]
 		}
 		frequencies_expr <- unlist(frequencies_expr)
 		if (length(which(frequencies_expr==0))==5) frequencies_expr[length(frequencies_expr)] <- 1
