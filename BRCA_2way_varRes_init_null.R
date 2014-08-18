@@ -2,25 +2,28 @@ args <- commandArgs(trailingOnly = TRUE)
 beg <- as.numeric(args[1])
 end <- as.numeric(args[2])
 load("./essentials_BRCA.RData")
+library(smoothie)
+library(aws)
 res_pr <- 50
 res_gb <- 50
 res_expr <- 50
 epsilon <- 1e-300
 
-tensor_product <- function(matrix1,matrix2) {
+tensor_product <- function(matrix1,matrix2,normalize=c("row","column","no")) {
 	if (is.matrix(matrix1) && is.matrix(matrix2)) result <- matrix(ncol=ncol(matrix1),nrow=ncol(matrix2),data=rep(0,ncol(matrix1)*ncol(matrix2))) else result <- matrix(ncol=length(matrix1),nrow=length(matrix1),data=rep(0,length(matrix1)*length(matrix2)))
 	
 	if (is.matrix(matrix1) && is.matrix(matrix2)) for (i in 1:nrow(matrix1)) {
 		result <- result + matrix(ncol=ncol(matrix1),nrow=ncol(matrix2),byrow=TRUE,data=apply(expand.grid(matrix1[i,],matrix2[i,]), 1, prod))
 	} else result <- result + matrix(nrow=length(matrix1),ncol=length(matrix2),byrow=TRUE,data=apply(expand.grid(matrix1,matrix2), 1, prod))
 	
-	#if (is.matrix(matrix1) && is.matrix(matrix2)) result <- result/nrow(matrix1)
+	if (is.matrix(matrix1) && is.matrix(matrix2)) result <- result/nrow(matrix1)
+	if (normalize[1] == "row") for (i in 1:nrow(result)) result[i,] <- result[i,]/sum(result[i,]) else if (normalize[1] == "column") for (i in 1:nrow(result)) result[,i] <- result[,i]/sum(result[,i])
+	result <- kernel2dsmooth(result,kernel.type = "cauchy",sigma=ceiling(ncol(result)*nrow(result)/nrow(matrix1)/10),nx=ncol(matrix2),ny=ncol(matrix1))
+	if (normalize[1] == "row") for (i in 1:nrow(result)) result[i,] <- result[i,]/sum(result[i,]) else if (normalize[1] == "column") for (i in 1:nrow(result)) result[,i] <- result[,i]/sum(result[,i]) else if (normalize[1] == "no") result/sum(result)
 	
-	#for (i in 1:ncol(result)) result[,i] <- result[,i]/sum(result[,i])
-	for (i in 1:nrow(result)) result[i,] <- result[i,]/sum(result[i,])
-	#}
 	return(result)
 }
+
 
 integrand_e <- function(x,k) {dpois(k,x)}
 integrand_m <- function(x,mean) {dnorm(x=mean,mean=x,sd=0.14)}
@@ -220,9 +223,12 @@ for (i in beg:end){
 	
 	# build and the full model with AN samples
 	# precompute correct initialization of parameters for AN-only model
-	prior_pr <- apply(promoter_an,2,mean)/sum(apply(promoter_an,2,mean))
-	prior_gb <- apply(body_an,2,mean)/sum(apply(body_an,2,mean))
-	prior_expr <- apply(expr_an,2,mean)/sum(apply(expr_an,2,mean))
+	prior_pr <- kernsm(apply(promoter_an,2,mean),h=2)
+	prior_pr <- prior_pr@yhat/sum(prior_pr@yhat)
+	prior_gb <- kernsm(apply(body_an,2,mean),h=2)
+	prior_gb <- prior_gb@yhat/sum(prior_gb@yhat)
+	prior_expr <- kernsm(apply(expr_an,2,mean),h=2)
+	prior_expr <- prior_expr@yhat/sum(prior_expr@yhat)
 	
 	string <- paste(prior_pr,collapse=",")
 	promoterPots <- paste("\nNAME:\t\tpot_",promoter_CpGs,"\nTYPE:\t\trowNorm\nPOT_MAT:\t[1,",res_pr,"]((",string,"))\nPC_MAT:\t\t[1,",res_pr,"]((",paste(rep(1,res_pr),collapse=","),"))\n",sep="",collapse="")
@@ -314,9 +320,12 @@ for (i in beg:end){
 	
 	# build and the full model with AN samples
 	# precompute correct initialization of parameters for AN-only model
-	prior_pr <- apply(promoter_t,2,mean)/sum(apply(promoter_t,2,mean))
-	prior_gb <- apply(body_t,2,mean)/sum(apply(body_t,2,mean))
-	prior_expr <- apply(expr_t,2,mean)/sum(apply(expr_t,2,mean))
+	prior_pr <- kernsm(apply(promoter_t,2,mean),h=2)
+	prior_pr <- prior_pr@yhat/sum(prior_pr@yhat)
+	prior_gb <- kernsm(apply(body_t,2,mean),h=2)
+	prior_gb <- prior_gb@yhat/sum(prior_gb@yhat)
+	prior_expr <- kernsm(apply(expr_t,2,mean),h=2)
+	prior_expr <- prior_expr@yhat/sum(prior_expr@yhat)
 	
 	string <- paste(prior_pr,collapse=",")
 	promoterPots <- paste("\nNAME:\t\tpot_",promoter_CpGs,"\nTYPE:\t\trowNorm\nPOT_MAT:\t[1,",res_pr,"]((",string,"))\nPC_MAT:\t\t[1,",res_pr,"]((",paste(rep(1,res_pr),collapse=","),"))\n",sep="",collapse="")
@@ -353,9 +362,12 @@ for (i in beg:end){
 	body_all <- rbind(body_t,body_an)
 	expr_all <- rbind(expr_t,expr_an)
 	
-	prior_pr <- apply(promoter_all,2,mean)
-	prior_gb <- apply(body_all,2,mean)
-	prior_expr <- apply(expr_all,2,mean)
+	prior_pr <- kernsm(apply(promoter_all,2,mean),h=2)
+	prior_pr <- prior_pr@yhat/sum(prior_pr@yhat)
+	prior_gb <- kernsm(apply(body_all,2,mean),h=2)
+	prior_gb <- prior_gb@yhat/sum(prior_gb@yhat)
+	prior_expr <- kernsm(apply(expr_all,2,mean),h=2)
+	prior_expr <- prior_expr@yhat/sum(prior_expr@yhat)
 	
 	string <- paste(prior_pr,collapse=",")
 	promoterPots <- paste("\nNAME:\t\tpot_",promoter_CpGs,"\nTYPE:\t\trowNorm\nPOT_MAT:\t[1,",res_pr,"]((",string,"))\nPC_MAT:\t\t[1,",res_pr,"]((",paste(rep(1,res_pr),collapse=","),"))\n",sep="",collapse="")
@@ -398,9 +410,12 @@ for (i in beg:end){
 		rownames(tempFac_T) <- Ts
 		eval(parse(text = paste('write.table(', paste('tempFac_T,file = "./',i,'/null/T_model/T_FacData.tab",row.names=TRUE,col.names=TRUE,quote=FALSE,sep="\t",append=FALSE)', sep = ""))))
 		
-		prior_pr <- apply(promoter_all[cur,],2,mean)
-		prior_gb <- apply(body_all[cur,],2,mean)
-		prior_expr <- apply(expr_all[cur,],2,mean)
+		prior_pr <- kernsm(apply(promoter_all[cur,],2,mean),h=2)
+		prior_pr <- prior_pr@yhat/sum(prior_pr@yhat)
+		prior_gb <- kernsm(apply(body_all[cur,],2,mean),h=2)
+		prior_gb <- prior_gb@yhat/sum(prior_gb@yhat)
+		prior_expr <- kernsm(apply(expr_all[cur,],2,mean),h=2)
+		prior_expr <- prior_expr@yhat/sum(prior_expr@yhat)
 		
 		string <- paste(prior_pr,collapse=",")
 		promoterPots <- paste("\nNAME:\t\tpot_",promoter_CpGs,"\nTYPE:\t\trowNorm\nPOT_MAT:\t[1,",res_pr,"]((",string,"))\nPC_MAT:\t\t[1,",res_pr,"]((",paste(rep(1,res_pr),collapse=","),"))\n",sep="",collapse="")
@@ -428,9 +443,12 @@ for (i in beg:end){
 		rownames(tempFac_AN) <- ANs
 		eval(parse(text = paste('write.table(', paste('tempFac_AN,file = "./',i,'/null/AN_model/AN_FacData.tab",row.names=TRUE,col.names=TRUE,quote=FALSE,sep="\t",append=FALSE)', sep = ""))))
 		
-		prior_pr <- apply(promoter_all[-cur,],2,mean)
-		prior_gb <- apply(body_all[-cur,],2,mean)
-		prior_expr <- apply(expr_all[-cur,],2,mean)
+		prior_pr <- kernsm(apply(promoter_all[-cur,],2,mean),h=2)
+		prior_pr <- prior_pr@yhat/sum(prior_pr@yhat)
+		prior_gb <- kernsm(apply(body_all[-cur,],2,mean),h=2)
+		prior_gb <- prior_gb@yhat/sum(prior_gb@yhat)
+		prior_expr <- kernsm(apply(expr_all[-cur,],2,mean),h=2)
+		prior_expr <- prior_expr@yhat/sum(prior_expr@yhat)
 		
 		string <- paste(prior_pr,collapse=",")
 		promoterPots <- paste("\nNAME:\t\tpot_",promoter_CpGs,"\nTYPE:\t\trowNorm\nPOT_MAT:\t[1,",res_pr,"]((",string,"))\nPC_MAT:\t\t[1,",res_pr,"]((",paste(rep(1,res_pr),collapse=","),"))\n",sep="",collapse="")

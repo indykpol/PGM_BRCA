@@ -2,6 +2,7 @@ args <- commandArgs(trailingOnly = TRUE)
 beg <- as.numeric(args[1])
 end <- as.numeric(args[2])
 load("./essentials_BRCA.RData")
+library(aws)
 res_pr <- 50
 epsilon <- 1e-300
 
@@ -113,9 +114,11 @@ for (i in beg:end){
 		promoter_an[current_sample,] <- apply(matrix(unlist(cpg_list_pr),ncol=res_pr,byrow=TRUE),2,geo_mean)/sum(apply(matrix(unlist(cpg_list_pr),ncol=res_pr,byrow=TRUE),2,geo_mean))
 	}
 	# precompute correct initialization of parameters for AN-only model
-	pr_an <- apply(promoter_an,2,mean)/sum(apply(promoter_an,2,mean))
+	prior_pr <- kernsm(apply(promoter_an,2,mean),h=2)
+	prior_pr <- prior_pr@yhat/sum(prior_pr@yhat)
+	
 	# write potentials file
-	string <- paste(pr_an,collapse=",")
+	string <- paste(prior_pr,collapse=",")
 	promoterPots <- paste("\nNAME:\t\tpot_",c("P.M.prior",promoterVars),"\nTYPE:\t\trowNorm\nPOT_MAT:\t[1,",res_pr,"]((",string,"))\nPC_MAT:\t\t[1,",res_pr,"]((",paste(rep(1,res_pr),collapse=","),"))\n",sep="")
 	potentials <- file(paste("./",i,"/AN_model/all/factorPotentials.txt",sep=""),"w")
 	cat(promoterPots,file=potentials)
@@ -158,9 +161,11 @@ for (i in beg:end){
 		promoter_t[current_sample,] <- apply(matrix(unlist(cpg_list_pr),ncol=res_pr,byrow=TRUE),2,geo_mean)/sum(apply(matrix(unlist(cpg_list_pr),ncol=res_pr,byrow=TRUE),2,geo_mean))
 	}
 	# precompute correct initialization of parameters for T-only model
-	pr_t <- apply(promoter_t,2,mean)/sum(apply(promoter_t,2,mean))
+	prior_pr <- kernsm(apply(promoter_t,2,mean),h=2)
+	prior_pr <- prior_pr@yhat/sum(prior_pr@yhat)
+	
 	# write potentials file
-	string <- paste(pr_t,collapse=",")
+	string <- paste(prior_pr,collapse=",")
 	promoterPots <- paste("\nNAME:\t\tpot_",c("P.M.prior",promoterVars),"\nTYPE:\t\trowNorm\nPOT_MAT:\t[1,",res_pr,"]((",string,"))\nPC_MAT:\t\t[1,",res_pr,"]((",paste(rep(1,res_pr),collapse=","),"))\n",sep="")
 	potentials <- file(paste("./",i,"/T_model/all/factorPotentials.txt",sep=""),"w")
 	cat(promoterPots,file=potentials)
@@ -179,9 +184,12 @@ for (i in beg:end){
 	## Full model developed from here, to obtain likelihoods of Ts and ANs ####
 	# precompute correct initialization of parameters for full model
 	promoter_all <- rbind(promoter_t,promoter_an)
-	pr_all <- apply(promoter_all,2,mean)/sum(apply(promoter_all,2,mean))
+	
+	prior_pr <- kernsm(apply(promoter_all,2,mean),h=2)
+	prior_pr <- prior_pr@yhat/sum(prior_pr@yhat)
+	
 	# write potentials file
-	string <- paste(pr_all,collapse=",")
+	string <- paste(prior_pr,collapse=",")
 	promoterPots <- paste("\nNAME:\t\tpot_",c("P.M.prior",promoterVars),"\nTYPE:\t\trowNorm\nPOT_MAT:\t[1,",res_pr,"]((",string,"))\nPC_MAT:\t\t[1,",res_pr,"]((",paste(rep(1,res_pr),collapse=","),"))\n",sep="")
 	potentials <- file(paste("./",i,"/full_model/factorPotentials.txt",sep=""),"w")
 	cat(promoterPots,file=potentials)
@@ -210,8 +218,11 @@ for (i in beg:end){
 		colnames(tempFac_T) <- promoter_CpGs[1:length(promoterVars)]
 		rownames(tempFac_T) <- Ts
 		eval(parse(text = paste('write.table(', paste('tempFac_T,file = "./',i,'/null/T_model/T_FacData.tab",row.names=TRUE,col.names=TRUE,quote=FALSE,sep="\t",append=FALSE)', sep = ""))))
-		pr_t <- apply(promoter_all[cur,],2,mean)/sum(apply(promoter_all[cur,],2,mean))
-		string <- paste(pr_t,collapse=",")
+		
+		prior_pr <- kernsm(apply(promoter_all[cur,],2,mean),h=2)
+		prior_pr <- prior_pr@yhat/sum(prior_pr@yhat)
+		
+		string <- paste(prior_pr,collapse=",")
 		promoterPots <- paste("\nNAME:\t\tpot_",c("P.M.prior",promoterVars),"\nTYPE:\t\trowNorm\nPOT_MAT:\t[1,",res_pr,"]((",string,"))\nPC_MAT:\t\t[1,",res_pr,"]((",paste(rep(1,res_pr),collapse=","),"))\n",sep="")
 		potentials <- file(paste("./",i,"/null/T_model/factorPotentials.txt",sep=""),"w")
 		cat(promoterPots,file=potentials)
@@ -225,8 +236,11 @@ for (i in beg:end){
 		colnames(tempFac_AN) <- promoter_CpGs[1:length(promoterVars)]
 		rownames(tempFac_AN) <- ANs
 		eval(parse(text = paste('write.table(', paste('tempFac_AN,file = "./',i,'/null/AN_model/AN_FacData.tab",row.names=TRUE,col.names=TRUE,quote=FALSE,sep="\t",append=FALSE)', sep = ""))))
-		pr_an <- apply(promoter_all[-cur,],2,mean)/sum(apply(promoter_all[-cur,],2,mean))
-		string <- paste(pr_an,collapse=",")
+		
+		prior_pr <- kernsm(apply(promoter_all[-cur,],2,mean),h=2)
+		prior_pr <- prior_pr@yhat/sum(prior_pr@yhat)
+		
+		string <- paste(prior_pr,collapse=",")
 		promoterPots <- paste("\nNAME:\t\tpot_",c("P.M.prior",promoterVars),"\nTYPE:\t\trowNorm\nPOT_MAT:\t[1,",res_pr,"]((",string,"))\nPC_MAT:\t\t[1,",res_pr,"]((",paste(rep(1,res_pr),collapse=","),"))\n",sep="")
 		potentials <- file(paste("./",i,"/null/AN_model/factorPotentials.txt",sep=""),"w")
 		cat(promoterPots,file=potentials)
