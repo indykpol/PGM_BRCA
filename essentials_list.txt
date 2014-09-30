@@ -1,0 +1,9 @@
+mmatrix_pc_top20,counts_BRCA_top20,factors_ls,samples,TSS1500Ind,TSS200Ind,UTR5Ind,EXON1Ind,GENEBODYInd,UTR3Ind,promoterVars_template,template_promoter_CpGs,geneBodyVars_template,template_body_CpGs,workingList_BRCA
+
+IDs_promoter <- NULL
+IDs_body <- NULL
+
+for (i in 1:length(top20)) {
+	IDs_promoter <- c(IDs_promoter,unique(c(eval(parse(text = paste('TSS1500Ind$SID$','"',top20[i],'"',sep=""))),eval(parse(text = paste('TSS200Ind$SID$','"',top20[i],'"',sep=""))), eval(parse(text = paste('UTR5Ind$SID$','"',top20[i],'"',sep="")))),eval(parse(text = paste('EXON1Ind$SID$','"',top20[i],'"',sep="")))))
+	IDs_body <- c(IDs_body,unique(c(eval(parse(text = paste('GENEBODYInd$SID$','"',top20[i],'"',sep=""))), eval(parse(text = paste('UTR3Ind$SID$','"',top20[i],'"',sep=""))))))
+}

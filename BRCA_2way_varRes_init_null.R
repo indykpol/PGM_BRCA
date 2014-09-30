@@ -7,16 +7,15 @@ res_pr <- 50
 res_gb <- 50
 res_expr <- 50
 
-smooth_expr <- 16
-smooth_meth <- 40
-smooth_2d <- 9
-if (smooth_expr > 0 | smooth_meth > 0) library(aws)
+smooth_1d <- 1
+smooth_2d <- 1
+if (smooth_1d > 0) library(aws)
 if (smooth_2d > 0) library(smoothie)
 
 integrand_e <- function(x,k) {dpois(k,x)}
 integrand_m <- function(x,mean) {dnorm(x=mean,mean=x,sd=0.14)}
 
-tensor_product <- function(matrix1,matrix2,normalize=c("row","column","no"),kernel=c("cauchy","gauss","minvar")) {
+tensor_product <- function(matrix1,matrix2,smooth_h=0,normalize=c("row","column","no"),kernel=c("gauss","cauchy","minvar")) {
 	if (is.matrix(matrix1) && is.matrix(matrix2)) result <- matrix(ncol=ncol(matrix1),nrow=ncol(matrix2),data=rep(0,ncol(matrix1)*ncol(matrix2))) else result <- matrix(ncol=length(matrix1),nrow=length(matrix1),data=rep(0,length(matrix1)*length(matrix2)))
 	
 	if (is.matrix(matrix1) && is.matrix(matrix2)) for (i in 1:nrow(matrix1)) {
@@ -24,13 +23,8 @@ tensor_product <- function(matrix1,matrix2,normalize=c("row","column","no"),kern
 	} else result <- result + matrix(nrow=length(matrix1),ncol=length(matrix2),byrow=TRUE,data=apply(expand.grid(matrix1,matrix2), 1, prod))
 	
 	if (is.matrix(matrix1) && is.matrix(matrix2)) result <- result/nrow(matrix1)
-	if (!is.null(kernel) && smooth_2d > 0) result <- kernel2dsmooth(result,kernel.type = kernel[1],sigma=smooth_2d,nx=ncol(matrix2),ny=ncol(matrix1))
+	if (!is.null(kernel) && smooth_h > 0) result <- kernel2dsmooth(result,kernel.type = kernel[1],sigma=smooth_h,nx=ncol(matrix2),ny=ncol(matrix1))
 	if (normalize[1] == "row") for (i in 1:nrow(result)) result[i,] <- result[i,]/sum(result[i,]) else if (normalize[1] == "column") for (i in 1:nrow(result)) result[,i] <- result[,i]/sum(result[,i])
-	
-	for (i in 1:nrow(result)) {
-		result[i,] <- kernsm(result[i,],h=smooth_meth)@yhat
-		result[i,] <- result[i,]/sum(result[i,])
-	}
 	return(result)
 }
 
@@ -75,11 +69,18 @@ for (i in beg:end){
 	geneBody_CpGs <- template_body_CpGs[1:length(IDs_body)]
 	ncol = length(IDs_promoter) + length(IDs_body) + 1
 	
-	###########################################################
-	################## calculate epsilons ####################
-	epsilon_pr <- 1/(length(Ts)*length(IDs_promoter))/res_pr
-	epsilon_gb <- 1/(length(Ts)*length(IDs_body))/res_gb
-	epsilon_e <- 1/length(Ts)/res_expr
+	############################################################
+	######### calculate epsilons and smoothing params ##########
+	epsilon_pr_t <- 1/(length(Ts)*length(IDs_promoter))/res_pr
+	epsilon_gb_t <- 1/(length(Ts)*length(IDs_body))/res_gb
+	epsilon_e_t <- 1/length(Ts)/res_expr
+	epsilon_pr_an <- 1/(length(ANs)*length(IDs_promoter))/res_pr
+	epsilon_gb_an <- 1/(length(ANs)*length(IDs_body))/res_gb
+	epsilon_e_an <- 1/length(ANs)/res_expr
+	
+	smooth_e <- 10/(mean(length(ANs),length(Ts))/(res_expr*2))
+	smooth_pr <- trunc(10/(mean(length(ANs),length(Ts))*length(IDs_promoter)/(res_pr*res_expr)))
+	smooth_gb <- trunc(10/(mean(length(ANs),length(Ts))*length(IDs_body)/(res_gb*res_expr)))
 	###########################################################
 	############### define the binning scheme  ################
 	all_labels_pr <- as.character(seq(1,res_pr,1))
@@ -185,7 +186,7 @@ for (i in beg:end){
 		}
 		frequencies_expr <- unlist(frequencies_expr)
 		if (length(which(frequencies_expr==0))==res_expr) frequencies_expr[length(frequencies_expr)] <- 1
-		frequencies_expr <- frequencies_expr + epsilon_e
+		frequencies_expr <- frequencies_expr + epsilon_e_an
 		frequencies_expr <- frequencies_expr/sum(frequencies_expr)
 		
 		# gene body
@@ -196,7 +197,7 @@ for (i in beg:end){
 			for (freq in 1:res_gb) {
 				frequencies_gb[freq] <- integrate(integrand_m,lower=breaksBODY[freq],upper=breaksBODY[freq+1],mean=miu)$value
 			}
-			frequencies_gb <- unlist(frequencies_gb) + epsilon_gb
+			frequencies_gb <- unlist(frequencies_gb) + epsilon_gb_an
 			frequencies_gb <- frequencies_gb/sum(frequencies_gb)
 			cpg_list_gb[[cpg]] <- frequencies_gb
 		}
@@ -209,7 +210,7 @@ for (i in beg:end){
 			for (freq in 1:res_pr) {
 				frequencies_pr[freq] <- integrate(integrand_m,lower=breaksPROMOTER[freq],upper=breaksPROMOTER[freq+1],mean=miu)$value
 			}
-			frequencies_pr <- unlist(frequencies_pr) + epsilon_pr
+			frequencies_pr <- unlist(frequencies_pr) + epsilon_pr_an
 			frequencies_pr <- frequencies_pr/sum(frequencies_pr)
 			cpg_list_pr[[cpg]] <- frequencies_pr
 		}
@@ -237,8 +238,8 @@ for (i in beg:end){
 	# precompute correct initialization of parameters for AN-only model
 	prior_pr <- apply(promoter_an,2,mean)
 	prior_gb <- apply(body_an,2,mean)
-	if (smooth_expr > 0) {
-		prior_expr <- kernsm(apply(expr_an,2,mean),h=smooth_expr)
+	if (smooth_1d > 0) {
+		prior_expr <- kernsm(apply(expr_an,2,mean),h=smooth_e)
 		prior_expr <- prior_expr@yhat/sum(prior_expr@yhat)
 	} else prior_expr <- apply(promoter_an,2,mean)
 	
@@ -249,10 +250,10 @@ for (i in beg:end){
 	string <- paste(prior_expr,collapse=",")
 	expr.pots <- paste("\nNAME:\t\tpot_EXPR.likelihood\nTYPE:\t\trowNorm\nPOT_MAT:\t[1,",res_expr,"]((",string,"))\nPC_MAT:\t\t[1,",res_expr,"]((",paste(rep(1,res_expr),collapse=","),"))\n\nNAME:\t\tpot_EXPR.prior\nTYPE:\t\trowNorm\nPOT_MAT:\t[1,",res_expr,"]((",string,"))\nPC_MAT:\t\t[1,",res_expr,"]((",paste(rep(1,res_expr),collapse=","),"))\n\n",sep="",collapse="")
 	
-	result <- tensor_product(body_an,expr_an)
+	result <- tensor_product(body_an,expr_an,smooth_h=smooth_gb)
 	expr.m <- paste("NAME:\t\tpot_EXPR.M.GB\nTYPE:\t\trowNorm\nPOT_MAT:\t\t[",paste(c(res_expr,res_gb),collapse=","),"]((",paste(apply(result,1,paste,collapse=","),collapse="),\n\t\t\t("),"))\nPC_MAT:\t\t[",paste(c(res_expr,res_gb),collapse=","),"]((",paste(apply(pseudo_counts_gb,1,paste,collapse=","),collapse="),\n\t\t\t("),"))\n\n",sep="",collapse="")
 	
-	result <- tensor_product(promoter_an,expr_an)
+	result <- tensor_product(promoter_an,expr_an,smooth_h=smooth_pr)
 	expr.m <- c(expr.m,paste("NAME:\t\tpot_EXPR.M.P\nTYPE:\t\trowNorm\nPOT_MAT:\t\t[",paste(c(res_expr,res_pr),collapse=","),"]((",paste(apply(result,1,paste,collapse=","),collapse="),\n\t\t\t("),"))\nPC_MAT:\t\t[",paste(c(res_expr,res_pr),collapse=","),"]((",paste(apply(pseudo_counts_pr,1,paste,collapse=","),collapse="),\n\t\t\t("),"))\n\n",sep="",collapse=""))
 	
 	potentials <- file(paste("./",i,"/AN_model/all/factorPotentials.txt",sep=""),"w")
@@ -264,7 +265,7 @@ for (i in beg:end){
 	rownames(tempFac) <- ANs
 	eval(parse(text = paste('write.table(', paste('tempFac,file ="./',i,'/AN_model/all/AN_FacData.tab",row.names=TRUE,col.names=TRUE,quote=FALSE,sep="\t",append=FALSE)', sep = ""))))
 	
-	#  query the full model with AN samples
+	# query the full model with AN samples
 	string<-system(intern=TRUE,command=paste('./dfgEval_static --dfgSpecPrefix=./',i,'/AN_model/all/ -l -n - ./',i,'/AN_model/all/AN_VarData.tab ./',i,'/AN_model/all/AN_FacData.tab',sep=""))
 	ANs_AN_likelihoods <- as.numeric(substring(string[-1],17))
 	##########################################################################
@@ -283,7 +284,7 @@ for (i in beg:end){
 		}
 		frequencies_expr <- unlist(frequencies_expr)
 		if (length(which(frequencies_expr==0))==res_expr) frequencies_expr[length(frequencies_expr)] <- 1
-		frequencies_expr <- frequencies_expr + epsilon_e
+		frequencies_expr <- frequencies_expr + epsilon_e_t
 		frequencies_expr <- frequencies_expr/sum(frequencies_expr)
 		
 		# gene body
@@ -294,7 +295,7 @@ for (i in beg:end){
 			for (freq in 1:res_gb) {
 				frequencies_gb[freq] <- integrate(integrand_m,lower=breaksBODY[freq],upper=breaksBODY[freq+1],mean=miu)$value
 			}
-			frequencies_gb <- unlist(frequencies_gb) + epsilon_gb
+			frequencies_gb <- unlist(frequencies_gb) + epsilon_gb_t
 			frequencies_gb <- frequencies_gb/sum(frequencies_gb)
 			cpg_list_gb[[cpg]] <- frequencies_gb
 		}
@@ -307,7 +308,7 @@ for (i in beg:end){
 			for (freq in 1:res_pr) {
 				frequencies_pr[freq] <- integrate(integrand_m,lower=breaksPROMOTER[freq],upper=breaksPROMOTER[freq+1],mean=miu)$value
 			}
-			frequencies_pr <- unlist(frequencies_pr) + epsilon_pr
+			frequencies_pr <- unlist(frequencies_pr) + epsilon_pr_t
 			frequencies_pr <- frequencies_pr/sum(frequencies_pr)
 			cpg_list_pr[[cpg]] <- frequencies_pr
 		}
@@ -334,8 +335,8 @@ for (i in beg:end){
 	# precompute correct initialization of parameters for T-only model
 	prior_pr <- apply(promoter_t,2,mean)
 	prior_gb <- apply(body_t,2,mean)
-	if (smooth_expr > 0) {
-		prior_expr <- kernsm(apply(expr_t,2,mean),h=smooth_expr)
+	if (smooth_1d > 0) {
+		prior_expr <- kernsm(apply(expr_t,2,mean),h=smooth_e)
 		prior_expr <- prior_expr@yhat/sum(prior_expr@yhat)
 	} else prior_expr <- apply(expr_t,2,mean)
 	
@@ -346,10 +347,10 @@ for (i in beg:end){
 	string <- paste(prior_expr,collapse=",")
 	expr.pots <- paste("\nNAME:\t\tpot_EXPR.likelihood\nTYPE:\t\trowNorm\nPOT_MAT:\t[1,",res_expr,"]((",string,"))\nPC_MAT:\t\t[1,",res_expr,"]((",paste(rep(1,res_expr),collapse=","),"))\n\nNAME:\t\tpot_EXPR.prior\nTYPE:\t\trowNorm\nPOT_MAT:\t[1,",res_expr,"]((",string,"))\nPC_MAT:\t\t[1,",res_expr,"]((",paste(rep(1,res_expr),collapse=","),"))\n\n",sep="",collapse="")
 	
-	result <- tensor_product(body_t,expr_t)
+	result <- tensor_product(body_t,expr_t,smooth_h=smooth_gb)
 	expr.m <- paste("NAME:\t\tpot_EXPR.M.GB\nTYPE:\t\trowNorm\nPOT_MAT:\t\t[",paste(c(res_expr,res_gb),collapse=","),"]((",paste(apply(result,1,paste,collapse=","),collapse="),\n\t\t\t("),"))\nPC_MAT:\t\t[",paste(c(res_expr,res_gb),collapse=","),"]((",paste(apply(pseudo_counts_gb,1,paste,collapse=","),collapse="),\n\t\t\t("),"))\n\n",sep="",collapse="")
 	
-	result <- tensor_product(promoter_t,expr_t)
+	result <- tensor_product(promoter_t,expr_t,smooth_h=smooth_pr)
 	expr.m <- c(expr.m,paste("NAME:\t\tpot_EXPR.M.P\nTYPE:\t\trowNorm\nPOT_MAT:\t\t[",paste(c(res_expr,res_pr),collapse=","),"]((",paste(apply(result,1,paste,collapse=","),collapse="),\n\t\t\t("),"))\nPC_MAT:\t\t[",paste(c(res_expr,res_pr),collapse=","),"]((",paste(apply(pseudo_counts_pr,1,paste,collapse=","),collapse="),\n\t\t\t("),"))\n\n",sep="",collapse=""))
 	
 	potentials <- file(paste("./",i,"/T_model/all/factorPotentials.txt",sep=""),"w")
@@ -376,8 +377,8 @@ for (i in beg:end){
 	
 	prior_pr <- apply(promoter_all,2,mean)
 	prior_gb <- apply(body_all,2,mean)
-	if (smooth_expr > 0) {
-		prior_expr <- kernsm(apply(expr_all,2,mean),h=smooth_expr)
+	if (smooth_1d > 0) {
+		prior_expr <- kernsm(apply(expr_all,2,mean),h=smooth_e)
 		prior_expr <- prior_expr@yhat/sum(prior_expr@yhat)
 	} else prior_expr <- apply(expr_all,2,mean)
 	
@@ -388,10 +389,10 @@ for (i in beg:end){
 	string <- paste(prior_expr,collapse=",")
 	expr.pots <- paste("\nNAME:\t\tpot_EXPR.likelihood\nTYPE:\t\trowNorm\nPOT_MAT:\t[1,",res_expr,"]((",string,"))\nPC_MAT:\t\t[1,",res_expr,"]((",paste(rep(1,res_expr),collapse=","),"))\n\nNAME:\t\tpot_EXPR.prior\nTYPE:\t\trowNorm\nPOT_MAT:\t[1,",res_expr,"]((",string,"))\nPC_MAT:\t\t[1,",res_expr,"]((",paste(rep(1,res_expr),collapse=","),"))\n\n",sep="",collapse="")
 	
-	result <- tensor_product(body_all,expr_all)
+	result <- tensor_product(body_all,expr_all,smooth_h=smooth_gb)
 	expr.m <- paste("NAME:\t\tpot_EXPR.M.GB\nTYPE:\t\trowNorm\nPOT_MAT:\t\t[",paste(c(res_expr,res_gb),collapse=","),"]((",paste(apply(result,1,paste,collapse=","),collapse="),\n\t\t\t("),"))\nPC_MAT:\t\t[",paste(c(res_expr,res_gb),collapse=","),"]((",paste(apply(pseudo_counts_gb,1,paste,collapse=","),collapse="),\n\t\t\t("),"))\n\n",sep="",collapse="")
 	
-	result <- tensor_product(promoter_all,expr_all)
+	result <- tensor_product(promoter_all,expr_all,smooth_h=smooth_pr)
 	expr.m <- c(expr.m,paste("NAME:\t\tpot_EXPR.M.P\nTYPE:\t\trowNorm\nPOT_MAT:\t\t[",paste(c(res_expr,res_pr),collapse=","),"]((",paste(apply(result,1,paste,collapse=","),collapse="),\n\t\t\t("),"))\nPC_MAT:\t\t[",paste(c(res_expr,res_pr),collapse=","),"]((",paste(apply(pseudo_counts_pr,1,paste,collapse=","),collapse="),\n\t\t\t("),"))\n\n",sep="",collapse=""))
 	
 	potentials <- file(paste("./",i,"/full_model/factorPotentials.txt",sep=""),"w")
@@ -424,8 +425,8 @@ for (i in beg:end){
 		
 		prior_pr <- apply(promoter_all[cur,],2,mean)
 		prior_gb <- apply(body_all[cur,],2,mean)
-		if (smooth_expr > 0) {
-			prior_expr <- kernsm(apply(expr_all[cur,],2,mean),h=smooth_expr)
+		if (smooth_1d > 0) {
+			prior_expr <- kernsm(apply(expr_all[cur,],2,mean),h=smooth_e)
 			prior_expr <- prior_expr@yhat/sum(prior_expr@yhat)
 		} else prior_expr <- apply(expr_all[cur,],2,mean)
 		
@@ -436,10 +437,10 @@ for (i in beg:end){
 		string <- paste(prior_expr,collapse=",")
 		expr.pots <- paste("\nNAME:\t\tpot_EXPR.likelihood\nTYPE:\t\trowNorm\nPOT_MAT:\t[1,",res_expr,"]((",string,"))\nPC_MAT:\t\t[1,",res_expr,"]((",paste(rep(1,res_expr),collapse=","),"))\n\nNAME:\t\tpot_EXPR.prior\nTYPE:\t\trowNorm\nPOT_MAT:\t[1,",res_expr,"]((",string,"))\nPC_MAT:\t\t[1,",res_expr,"]((",paste(rep(1,res_expr),collapse=","),"))\n\n",sep="",collapse="")
 		
-		result <- tensor_product(body_all[cur,],expr_all[cur,])
+		result <- tensor_product(body_all[cur,],expr_all[cur,],smooth_h=smooth_gb)
 		expr.m <- paste("NAME:\t\tpot_EXPR.M.GB\nTYPE:\t\trowNorm\nPOT_MAT:\t\t[",paste(c(res_expr,res_gb),collapse=","),"]((",paste(apply(result,1,paste,collapse=","),collapse="),\n\t\t\t("),"))\nPC_MAT:\t\t[",paste(c(res_expr,res_gb),collapse=","),"]((",paste(apply(pseudo_counts_gb,1,paste,collapse=","),collapse="),\n\t\t\t("),"))\n\n",sep="",collapse="")
 		
-		result <- tensor_product(promoter_all[cur,],expr_all[cur,])
+		result <- tensor_product(promoter_all[cur,],expr_all[cur,],smooth_h=smooth_pr)
 		expr.m <- c(expr.m,paste("NAME:\t\tpot_EXPR.M.P\nTYPE:\t\trowNorm\nPOT_MAT:\t\t[",paste(c(res_expr,res_pr),collapse=","),"]((",paste(apply(result,1,paste,collapse=","),collapse="),\n\t\t\t("),"))\nPC_MAT:\t\t[",paste(c(res_expr,res_pr),collapse=","),"]((",paste(apply(pseudo_counts_pr,1,paste,collapse=","),collapse="),\n\t\t\t("),"))\n\n",sep="",collapse=""))
 		
 		potentials <- file(paste("./",i,"/null/T_model/factorPotentials.txt",sep=""),"w")
@@ -457,8 +458,8 @@ for (i in beg:end){
 		
 		prior_pr <- apply(promoter_all[-cur,],2,mean)
 		prior_gb <- apply(body_all[-cur,],2,mean)
-		if (smooth_expr > 0) {
-			prior_expr <- kernsm(apply(expr_all[-cur,],2,mean),h=smooth_expr)
+		if (smooth_1d > 0) {
+			prior_expr <- kernsm(apply(expr_all[-cur,],2,mean),h=smooth_e)
 			prior_expr <- prior_expr@yhat/sum(prior_expr@yhat)
 		} else prior_expr <- apply(expr_all[-cur,],2,mean)
 		
@@ -469,10 +470,10 @@ for (i in beg:end){
 		string <- paste(prior_expr,collapse=",")
 		expr.pots <- paste("\nNAME:\t\tpot_EXPR.likelihood\nTYPE:\t\trowNorm\nPOT_MAT:\t[1,",res_expr,"]((",string,"))\nPC_MAT:\t\t[1,",res_expr,"]((",paste(rep(1,res_expr),collapse=","),"))\n\nNAME:\t\tpot_EXPR.prior\nTYPE:\t\trowNorm\nPOT_MAT:\t[1,",res_expr,"]((",string,"))\nPC_MAT:\t\t[1,",res_expr,"]((",paste(rep(1,res_expr),collapse=","),"))\n\n",sep="",collapse="")
 		
-		result <- tensor_product(body_all[-cur,],expr_all[-cur,])
+		result <- tensor_product(body_all[-cur,],expr_all[-cur,],smooth_h=smooth_gb)
 		expr.m <- paste("NAME:\t\tpot_EXPR.M.GB\nTYPE:\t\trowNorm\nPOT_MAT:\t\t[",paste(c(res_expr,res_gb),collapse=","),"]((",paste(apply(result,1,paste,collapse=","),collapse="),\n\t\t\t("),"))\nPC_MAT:\t\t[",paste(c(res_expr,res_gb),collapse=","),"]((",paste(apply(pseudo_counts_gb,1,paste,collapse=","),collapse="),\n\t\t\t("),"))\n\n",sep="",collapse="")
 		
-		result <- tensor_product(promoter_all[-cur,],expr_all[-cur,])
+		result <- tensor_product(promoter_all[-cur,],expr_all[-cur,],smooth_h=smooth_pr)
 		expr.m <- c(expr.m,paste("NAME:\t\tpot_EXPR.M.P\nTYPE:\t\trowNorm\nPOT_MAT:\t\t[",paste(c(res_expr,res_pr),collapse=","),"]((",paste(apply(result,1,paste,collapse=","),collapse="),\n\t\t\t("),"))\nPC_MAT:\t\t[",paste(c(res_expr,res_pr),collapse=","),"]((",paste(apply(pseudo_counts_pr,1,paste,collapse=","),collapse="),\n\t\t\t("),"))\n\n",sep="",collapse=""))
 		
 		potentials <- file(paste("./",i,"/null/AN_model/factorPotentials.txt",sep=""),"w")
@@ -489,7 +490,7 @@ for (i in beg:end){
 	if (sd(Ds) != 0) zscore <- (D - mean(Ds)) / sd(Ds) else zscore <- 0
 	###########################################################################################
 	
-	eval(parse(text=paste('write.table(x=t(c(pval_zscore,D,mean(Ds),sd(Ds),zscore), col.names=FALSE, row.names=FALSE, append=FALSE, file="./',i,'.result")',sep="")))
+	eval(parse(text=paste('write.table(x=t(c(pval_zscore,D,mean(Ds),sd(Ds),zscore)), col.names=FALSE, row.names=FALSE, append=TRUE, file="./',i,'.result")',sep="")))
 	eval(parse(text=paste('write.table(x=t(breaksEXPRESSION), col.names=FALSE, row.names=FALSE, append=TRUE, file="./',i,'.result")',sep="")))
 	eval(parse(text=paste('write.table(x=t(breaksBODY), col.names=FALSE, row.names=FALSE, append=TRUE, file="./',i,'.result")',sep="")))
 	eval(parse(text=paste('write.table(x=t(breaksPROMOTER), col.names=FALSE, row.names=FALSE, append=TRUE, file="./',i,'.result")',sep="")))

@@ -4,7 +4,7 @@ end <- as.numeric(args[2])
 load("./essentials_BRCA.RData")
 
 res_pr <- 50
-smooth = 20
+smooth <- 1
 if (smooth > 0) library(aws)
 
 integrand_m <- function(x,mean) {dnorm(x=mean,mean=x,sd=0.14)}
@@ -42,9 +42,12 @@ for (i in beg:end){
 	tempVar <- rbind(tempVar,tempVar)
 	rownames(tempVar) <- c(Ts,ANs)
 	eval(parse(text = paste('write.table(', paste('tempVar,file = "./',i,'/full_model/full_VarData.tab",row.names=TRUE,col.names=TRUE,quote=FALSE,sep="\t",append=FALSE)', sep = ""))))
-	###########################################################
-	################## calculate epsilon #####################
-	epsilon_pr <- 1/(length(Ts)*ncol)/res_pr
+	############################################################
+	######### calculate epsilons and smoothing params ##########
+	epsilon_pr_t <- 1/(length(Ts)*ncol)/res_pr
+	epsilon_pr_an <- 1/(length(ANs)*ncol)/res_pr
+	
+	smooth_gb <- 10/(mean(length(ANs),length(Ts))*length(IDs_promoter)/(res_pr*2))
 	###########################################################
 	############### binning scheme defined here ###############
 	# promoter
@@ -102,7 +105,7 @@ for (i in beg:end){
 			for (freq in 1:res_pr) {
 				frequencies_pr[freq] <- integrate(integrand_m,lower=breaksPROMOTER[freq],upper=breaksPROMOTER[freq+1],mean=miu)$value
 			}
-			frequencies_pr <- unlist(frequencies_pr) + epsilon_pr
+			frequencies_pr <- unlist(frequencies_pr) + epsilon_pr_an
 			frequencies_pr <- frequencies_pr/sum(frequencies_pr)
 			cpg_list_pr[[cpg]] <- frequencies_pr
 		}
@@ -119,7 +122,7 @@ for (i in beg:end){
 	}
 	# precompute correct initialization of parameters for AN-only model
 	if (smooth > 0) {
-		prior_pr <- kernsm(apply(promoter_an,2,mean),h=smooth)
+		prior_pr <- kernsm(apply(promoter_an,2,mean),h=smooth_gb)
 		prior_pr <- prior_pr@yhat/sum(prior_pr@yhat)
 	} else prior_pr <- apply(promoter_an,2,mean)
 	
@@ -151,7 +154,7 @@ for (i in beg:end){
 			for (freq in 1:res_pr) {
 				frequencies_pr[freq] <- integrate(integrand_m,lower=breaksPROMOTER[freq],upper=breaksPROMOTER[freq+1],mean=miu)$value
 			}
-			frequencies_pr <- unlist(frequencies_pr) + epsilon_pr
+			frequencies_pr <- unlist(frequencies_pr) + epsilon_pr_t
 			frequencies_pr <- frequencies_pr/sum(frequencies_pr)
 			cpg_list_pr[[cpg]] <- frequencies_pr
 		}
@@ -168,7 +171,7 @@ for (i in beg:end){
 	}
 	# precompute correct initialization of parameters for T-only model
 	if (smooth > 0) {
-		prior_pr <- kernsm(apply(promoter_t,2,mean),h=smooth)
+		prior_pr <- kernsm(apply(promoter_t,2,mean),h=smooth_gb)
 		prior_pr <- prior_pr@yhat/sum(prior_pr@yhat)
 	} else prior_pr <- apply(promoter_t,2,mean)
 	
@@ -194,7 +197,7 @@ for (i in beg:end){
 	promoter_all <- rbind(promoter_t,promoter_an)
 	
 	if (smooth > 0) {
-		prior_pr <- kernsm(apply(promoter_all,2,mean),h=smooth)
+		prior_pr <- kernsm(apply(promoter_all,2,mean),h=smooth_gb)
 		prior_pr <- prior_pr@yhat/sum(prior_pr@yhat)
 	} else prior_pr <- apply(promoter_all,2,mean)
 	
@@ -230,7 +233,7 @@ for (i in beg:end){
 		eval(parse(text = paste('write.table(', paste('tempFac_T,file = "./',i,'/null/T_model/T_FacData.tab",row.names=TRUE,col.names=TRUE,quote=FALSE,sep="\t",append=FALSE)', sep = ""))))
 		
 		if (smooth > 0) {
-			prior_pr <- kernsm(apply(promoter_all[cur,],2,mean),h=smooth)
+			prior_pr <- kernsm(apply(promoter_all[cur,],2,mean),h=smooth_gb)
 			prior_pr <- prior_pr@yhat/sum(prior_pr@yhat)
 		} else prior_pr <- apply(promoter_all[cur,],2,mean)
 		
@@ -250,7 +253,7 @@ for (i in beg:end){
 		eval(parse(text = paste('write.table(', paste('tempFac_AN,file = "./',i,'/null/AN_model/AN_FacData.tab",row.names=TRUE,col.names=TRUE,quote=FALSE,sep="\t",append=FALSE)', sep = ""))))
 		
 		if (smooth > 0) {
-			prior_pr <- kernsm(apply(promoter_all[-cur,],2,mean),h=smooth)
+			prior_pr <- kernsm(apply(promoter_all[-cur,],2,mean),h=smooth_gb)
 			prior_pr <- prior_pr@yhat/sum(prior_pr@yhat)
 		} else prior_pr <- apply(promoter_all[-cur,],2,mean)
 		

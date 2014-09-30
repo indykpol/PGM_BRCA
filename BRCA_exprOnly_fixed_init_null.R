@@ -4,7 +4,7 @@ end <- as.numeric(args[2])
 load("./essentials_BRCA.RData")
 
 res_expr <- 50
-smooth = 16
+smooth = 1
 if (smooth > 0) library(aws)
 
 integrand_e <- function(x,k) {dpois(k,x)}
@@ -33,9 +33,12 @@ for (i in beg:end){
 	tempVar <- rbind(tempVar,tempVar)
 	rownames(tempVar) <- c(Ts,ANs)
 	eval(parse(text = paste('write.table(', paste('tempVar,file = "./',i,'/full_model/full_VarData.tab",row.names=TRUE,col.names=TRUE,quote=FALSE,sep="\t",append=FALSE)', sep = ""))))
-	###########################################################
-	################### calculate epsilons ####################
-	epsilon_e <- 1/length(Ts)/res_expr
+	############################################################
+	######### calculate epsilons and smoothing params ##########
+	epsilon_e_t <- 1/length(Ts)/res_expr
+	epsilon_e_an <- 1/length(ANs)/res_expr
+	
+	smooth_e <- 10/(mean(length(ANs),length(Ts))/(res_expr*2))
 	###########################################################
 	############### binning scheme defined here ###############
 	# expression
@@ -100,7 +103,7 @@ for (i in beg:end){
 		}
 		frequencies_expr <- unlist(frequencies_expr)
 		if (length(which(frequencies_expr==0))==res_expr) frequencies_expr[length(frequencies_expr)] <- 1
-		frequencies_expr <- frequencies_expr + epsilon_e
+		frequencies_expr <- frequencies_expr + epsilon_e_an
 		frequencies_expr <- frequencies_expr/sum(frequencies_expr)
 		
 		#start precomputing correct initialization of parameters
@@ -109,7 +112,7 @@ for (i in beg:end){
 	}
 	# precompute correct initialization of parameters for AN-only model
 	if (smooth > 0) {
-		prior_expr <- kernsm(apply(expr_an,2,mean),h=smooth)
+		prior_expr <- kernsm(apply(expr_an,2,mean),h=smooth_e)
 		prior_expr <- prior_expr@yhat/sum(prior_expr@yhat)
 	} else prior_expr <- apply(expr_an,2,mean)
 	
@@ -143,7 +146,7 @@ for (i in beg:end){
 		}
 		frequencies_expr <- unlist(frequencies_expr)
 		if (length(which(frequencies_expr==0))==res_expr) frequencies_expr[length(frequencies_expr)] <- 1
-		frequencies_expr <- frequencies_expr + epsilon_e
+		frequencies_expr <- frequencies_expr + epsilon_e_t
 		frequencies_expr <- frequencies_expr/sum(frequencies_expr)
 		
 		#start precomputing correct initialization of parameters
@@ -153,7 +156,7 @@ for (i in beg:end){
 	}
 	# precompute correct initialization of parameters for T-only model
 	if (smooth > 0) {
-		prior_expr <- kernsm(apply(expr_t,2,mean),h=smooth)
+		prior_expr <- kernsm(apply(expr_t,2,mean),h=smooth_e)
 		prior_expr <- prior_expr@yhat/sum(prior_expr@yhat)
 	} else prior_expr <- apply(expr_t,2,mean)
 	
@@ -179,7 +182,7 @@ for (i in beg:end){
 	expr_all <- rbind(expr_t,expr_an)
 	
 	if (smooth > 0) {
-		prior_expr <- kernsm(apply(expr_all,2,mean),h=smooth)
+		prior_expr <- kernsm(apply(expr_all,2,mean),h=smooth_e)
 		prior_expr <- prior_expr@yhat/sum(prior_expr@yhat)
 	} else prior_expr <- apply(expr_all,2,mean)
 	
@@ -216,7 +219,7 @@ for (i in beg:end){
 		eval(parse(text = paste('write.table(', paste('tempFac_T,file = "./',i,'/null/T_model/T_FacData.tab",row.names=TRUE,col.names=TRUE,quote=FALSE,sep="\t",append=FALSE)', sep = ""))))
 		
 		if (smooth > 0) {
-			prior_expr <- kernsm(apply(expr_all[cur,],2,mean),h=smooth)
+			prior_expr <- kernsm(apply(expr_all[cur,],2,mean),h=smooth_e)
 			prior_expr <- prior_expr@yhat/sum(prior_expr@yhat)
 		} else prior_expr <- apply(expr_all[cur,],2,mean)
 		
@@ -236,7 +239,7 @@ for (i in beg:end){
 		eval(parse(text = paste('write.table(', paste('tempFac_AN,file = "./',i,'/null/AN_model/AN_FacData.tab",row.names=TRUE,col.names=TRUE,quote=FALSE,sep="\t",append=FALSE)', sep = ""))))
 		
 		if (smooth > 0) {
-			prior_expr <- kernsm(apply(expr_all[-cur,],2,mean),h=smooth)
+			prior_expr <- kernsm(apply(expr_all[-cur,],2,mean),h=smooth_e)
 			prior_expr <- prior_expr@yhat/sum(prior_expr@yhat)
 		} else prior_expr <- apply(expr_all[-cur,],2,mean)
 		
