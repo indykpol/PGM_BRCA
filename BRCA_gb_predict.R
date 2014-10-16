@@ -48,7 +48,7 @@ epsilon_e <- 1/length(samples)/res_expr
 tempS_samples <- matrix(ncol=ncol,nrow=length(samples))
 for (current_sample in 1:length(samples)) {
 	# expression
-	read_count <- trunc(counts_BRCA[workingList_BRCA[i],samples[current_sample]])
+	read_count <- trunc(counts_BRCA_top20[workingList_BRCA[i],samples[current_sample]])
 	lambdas <- breaksEXPRESSION * factors_ls[current_sample]
 	frequencies_expr <- rep(0,length(breaksEXPRESSION)-1)
 	for (freq in 1:res_expr) {
@@ -62,31 +62,27 @@ for (current_sample in 1:length(samples)) {
 	# gene body
 	cpg_list_gb <- NULL
 	for (cpg in 1:length(geneBodyVars)) {
-		miu <- mmatrix_pc[IDs_body[cpg],samples[current_sample]]
-		if (!is.na(miu)) {
-			frequencies_gb <- rep(0,res_gb)
-			for (freq in 1:res_gb) {
-			frequencies_gb[freq] <- integrate(integrand_m,lower=breaksBODY[freq],upper=breaksBODY[freq+1],mean=miu)$value
-			}
-			frequencies_gb <- unlist(frequencies_gb) + epsilon_gb
-			frequencies_gb <- frequencies_gb/sum(frequencies_gb)
-			cpg_list_gb[[cpg]] <- frequencies_gb
-		} else cpg_list_gb[[cpg]] <- rep(1/res_gb,res_gb)
+		miu <- mmatrix_pc_top20[IDs_body[cpg],samples[current_sample]]
+		frequencies_gb <- rep(0,res_gb)
+		for (freq in 1:res_gb) {
+		frequencies_gb[freq] <- integrate(integrand_m,lower=breaksBODY[freq],upper=breaksBODY[freq+1],mean=miu)$value
+		}
+		frequencies_gb <- unlist(frequencies_gb) + epsilon_gb
+		frequencies_gb <- frequencies_gb/sum(frequencies_gb)
+		cpg_list_gb[[cpg]] <- frequencies_gb
 	}
 	
 	# promoter
 	cpg_list_pr <- NULL
 	for (cpg in 1:length(promoterVars)) {
-		miu <- mmatrix_pc[IDs_promoter[cpg],samples[current_sample]]
-		if (!is.na(miu)) {
-			frequencies_pr <- rep(0,res_pr)
-			for (freq in 1:res_pr) {
-			frequencies_pr[freq] <- integrate(integrand_m,lower=breaksPROMOTER[freq],upper=breaksPROMOTER[freq+1],mean=miu)$value
-			}
-			frequencies_pr <- unlist(frequencies_pr) + epsilon_pr
-			frequencies_pr <- frequencies_pr/sum(frequencies_pr)
-			cpg_list_pr[[cpg]] <- frequencies_pr
-		} else cpg_list_pr[[cpg]] <- rep(1/res_pr,res_pr)
+		miu <- mmatrix_pc_top20[IDs_promoter[cpg],samples[current_sample]]
+		frequencies_pr <- rep(0,res_pr)
+		for (freq in 1:res_pr) {
+		frequencies_pr[freq] <- integrate(integrand_m,lower=breaksPROMOTER[freq],upper=breaksPROMOTER[freq+1],mean=miu)$value
+		}
+		frequencies_pr <- unlist(frequencies_pr) + epsilon_pr
+		frequencies_pr <- frequencies_pr/sum(frequencies_pr)
+		cpg_list_pr[[cpg]] <- frequencies_pr
 	}
 	
 	tempS_formated <- matrix(ncol=ncol,nrow=1)
