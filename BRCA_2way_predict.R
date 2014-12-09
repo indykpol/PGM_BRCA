@@ -1,6 +1,6 @@
 args <- commandArgs(trailingOnly = TRUE)
 i <- as.numeric(args[1])
-load("essentials_BRCA_predict.RData")
+load("essentials_allBRCA.RData")
 
 integrand_e <- function(x,k) {dpois(k,x)}
 integrand_m <- function(x,mean) {dnorm(x=mean,mean=x,sd=0.14)}
@@ -110,15 +110,15 @@ eval(parse(text = paste('write.table(', paste('tempFac,file ="./',i,'/toPredict/
 
 # query the full AN model
 string<-system(intern=TRUE,command=paste('./dfgEval_static --dfgSpecPrefix=./',i,'/AN_model/all/ -l -n - ./',i,'/toPredict/samples_VarData.tab ./',i,'/toPredict/samples_FacData.tab',sep=""))
-samples_AN_likelihoods <- as.numeric(substring(string[-1],17))
+samples_G1_likelihoods <- as.numeric(substring(string[-1],17))
 
 # query the full T model
 string<-system(intern=TRUE,command=paste('./dfgEval_static --dfgSpecPrefix=./',i,'/T_model/all/ -l -n - ./',i,'/toPredict/samples_VarData.tab ./',i,'/toPredict/samples_FacData.tab',sep=""))
-samples_T_likelihoods <- as.numeric(substring(string[-1],17))
+samples_G2_likelihoods <- as.numeric(substring(string[-1],17))
 
 # T posterior probability calculation
-out <- cbind(samples,exp(-samples_T_likelihoods) / (exp(-samples_AN_likelihoods) + exp(-samples_T_likelihoods)),samples_T_likelihoods,samples_AN_likelihoods)
-colnames(out) <- c("sample_ID","posterior_T","T_mloglik","AN_mloglik")
+out <- cbind(samples,exp(-samples_G2_likelihoods) / (exp(-samples_G1_likelihoods) + exp(-samples_G2_likelihoods)),samples_G2_likelihoods,samples_G1_likelihoods)
+colnames(out) <- c("sample_ID","posterior_G2","G2_mloglik","G1_mloglik")
 eval(parse(text=paste('write.table(as.data.frame(out), col.names=TRUE, row.names=FALSE, quote=FALSE, append=FALSE, file="./',i,'.predicted")',sep="")))
 
 cat(paste("done predicting for ",i," in ", sprintf("%.2f", (proc.time()[3]-ptm)/60)," minutes\n",sep=""))
