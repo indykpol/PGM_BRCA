@@ -28,7 +28,7 @@ ncol = length(IDs_promoter) + length(IDs_body) + 1
 
 breaksEXPRESSION <- t(read.table(nrow=1,skip=1,file=paste("./",i,".result",sep="")))[,1]
 breaksBODY <- t(read.table(nrow=1,skip=2,file=paste("./",i,".result",sep="")))[,1]
-breaksPROMOTER <- t(read.table(nrow=1,skip=2,file=paste("./",i,".result",sep="")))[,1]
+breaksPROMOTER <- t(read.table(nrow=1,skip=3,file=paste("./",i,".result",sep="")))[,1]
 
 res_expr <- length(breaksEXPRESSION)-1
 res_pr <- length(breaksPROMOTER)-1
